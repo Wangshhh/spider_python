@@ -4,10 +4,11 @@
 #=============================================================================
 #     FileName: main.py
 #         Desc: 运行程序之后，请不要关闭运行窗口，可以在浏览器中通过"http://127.0.0.1:8888"访问爬虫找到的工作链接。
-#       Author: lizherui, mmoonzhu
+#       Author: lizherui, mmoonzhu, wangjingyao
 #        Email: lzrak47m4a1@gmail.com, myzhu@tju.edu.cn
 #     HomePage: https://github.com/lizherui/spider_python
-#      Version: 0.0.1
+#      Version: 0.0.1.1
+#          Add: 增加了对cc98内的帖子的抓取
 #   LastChange: 2013-08-20 15:27:25
 #=============================================================================
 '''
@@ -18,13 +19,14 @@ from apscheduler.scheduler import Scheduler
 import re
 import redis
 import requests
+from urllib import urlopen
 
 HOST_NAME = '127.0.0.1'  # Web页面的ip
 PORT_NUMBER = 8888  # Web页面的port
 REDIS_IP = '127.0.0.1'  # Redis的ip
 REDIS_PORT = 6379  # Redis的port
-REDIS_FLUSH_FREQUENCE = 10  # Redis清空的频率
-SPIDER_KEYS = (u'校招', u'应届', u'毕业生', 'Google')  # 筛选的关键词
+REDIS_FLUSH_FREQUENCE = 2  # Redis清空的频率
+SPIDER_KEYS = (u'校招', u'应届', u'毕业生', 'Google', u'北京')  # 筛选的关键词
 CRAWLER_FREQUENCE_HOURS = 1  # 每隔一个小时爬取一次
 
 
@@ -46,7 +48,7 @@ class Crawler:
         self.rs = redis.Redis(host=REDIS_IP, port=REDIS_PORT)
         self.http_querys = (
                                 {
-                                    'host' : 'http://bbs.byr.cn',
+                                   'host' : 'http://bbs.byr.cn',
                                     'url'  : 'http://bbs.byr.cn/board/JobInfo',
                                     'headers' : {
                                         "X-Requested-With" : "XMLHttpRequest",
@@ -62,27 +64,54 @@ class Crawler:
                                     },
                                     'href' : "^/nForum/article/Career_Campus/\d+$",
                                 },
+
+				{
+                                    'host' : 'http://www.cc98.org',
+                                    'url'  : 'http://www.cc98.org/list.asp?boardid=235',
+                                    'headers' : {
+                                        "X-Requested-With" : "XMLHttpRequest",
+                                    },
+                                   # 'href' : "^dispbbs\.asp\?boardID\=235\&ID\=(\d)*\&page\=",
+                                    'href' : "^dispbbs\.asp.+$",
+                                },
                         )
 
     def _parse_html_to_urls(self, host, url, headers, href):
-        r = requests.get(url, headers=headers)
-        frs_soup = BeautifulSoup(r.text)
-        frs_attrs = {
-            'href' : re.compile(href),
-            'title' : None,
-            'target' : None,
-        }
+        if 'cc98' in host:
+            r = urlopen(url).read()
+            frs_soup = BeautifulSoup(r)
+            frs_attrs = {
+                'href' : re.compile(href),
+                'id' : re.compile("^topic")
+            }
+        else:       
+            r = requests.get(url, headers = headers)
+            frs_soup = BeautifulSoup(r.text)
+            frs_attrs = {
+                'href' : re.compile(href),
+                'title' : None,
+                'target' : None,
+            }
         frs_res = frs_soup.findAll('a', frs_attrs)
         urls = []
         for res in frs_res:
             if res.parent.parent.get('class') != 'top':
-                res['href'] = host + res['href']
+                if 'cc98' in host:
+                    res['href'] = host + '/' + res['href']
+                else:                
+                    res['href'] = host + res['href']
                 urls.append(res)
         return urls
 
     def _put_urls_into_redis(self, urls):
         for url in urls:
-            title = url.string
+            if 'cc98' in url['href']:
+                r = urlopen(url['href']).read()
+                frs_soup = BeautifulSoup(r)
+                title = frs_soup.title.string
+            else:
+                title = url.string
+
             if filter(lambda x: x in title, SPIDER_KEYS):
                 self.rs.sadd('urls', url)
 

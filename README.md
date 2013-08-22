@@ -1,9 +1,12 @@
 spider_python
 =============
 
-抓取北邮人论坛和水木社区校招信息的爬虫程序。
+抓取北邮人论坛/水木社区/cc98论坛的校招信息的爬虫程序。
+感谢lizherui等大神的启发。
+
 
 爬虫默认每隔1小时抓取1次，每抓取10次清空所有数据。
+每次更新的是相应版面首页出现关键词的信息。
 
 Unix/Windows下均需要先在本机安装[redis](http://redis.io)服务程序，然后在Unix下运行redis-server，在Windows下启动redis-server.exe。
 
